@@ -1,0 +1,6 @@
+{
+  "name": "CommunitEase",
+  "description": "A minimalist neighborhood platform for reporting and resolving civic issues with a trust-based reputation system.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": []
+}

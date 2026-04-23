@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "Issue": {
+      "title": "Community Issue",
+      "description": "A reported civic issue in the neighborhood.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "reporterLevel": { "type": "number" },
+        "reporterAvatar": { "type": "string" },
+        "location": { "type": "string" },
+        "votes": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "verified", "critical"] },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "reporterUid": { "type": "string" }
+      },
+      "required": ["title", "reporterUid", "status"]
+    },
+    "Survey": {
+      "title": "Digitized Survey",
+      "description": "A community survey digitized via AI.",
+      "type": "object",
+      "properties": {
+        "need": { "type": "string" },
+        "location": { "type": "string" },
+        "severity": { "type": "number" },
+        "comment": { "type": "string" },
+        "processedAt": { "type": "string", "format": "date-time" },
+        "processedByUid": { "type": "string" }
+      },
+      "required": ["need", "location", "severity", "processedByUid"]
+    },
+    "User": {
+      "title": "App User",
+      "description": "Reputation and profile data for an app user.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "level": { "type": "number" },
+        "avatar": { "type": "string" },
+        "repPoints": { "type": "number" },
+        "reportsCount": { "type": "number" },
+        "votesCount": { "type": "number" },
+        "badges": { 
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["name", "level"]
+    }
+  },
+  "firestore": {
+    "/issues/{issueId}": {
+      "schema": "Issue",
+      "description": "Collection of all community reported issues."
+    },
+    "/surveys/{surveyId}": {
+      "schema": "Survey",
+      "description": "Collection of all AI-digitized physical surveys."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and reputation store."
+    }
+  }
+}
