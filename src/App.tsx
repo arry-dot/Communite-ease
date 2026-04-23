@@ -20,7 +20,7 @@ import {
   updateDoc,
   increment
 } from 'firebase/firestore';
-import { getAuth, signInAnonymously, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, updateProfile, User as FirebaseUser } from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
 import { 
   Home, 
@@ -144,10 +144,18 @@ export default function App() {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (name: string) => {
     try {
       console.log("Attempting Auth...");
-      await signInAnonymously(auth);
+      const result = await signInAnonymously(auth);
+      
+      // Update display name for the user
+      if (result.user) {
+         await updateProfile(result.user, { displayName: name });
+         // Force state update by refreshing the user object or just letting the listener handle it
+         setCurrentUser({ ...result.user, displayName: name });
+         triggerToast(`Welcome, ${name}`);
+      }
       setActiveScreen('home');
     } catch (e: any) {
       console.warn("Auth failed, bypassing for prototype:", e.message);
@@ -155,11 +163,12 @@ export default function App() {
       const guestUser = {
         uid: 'guest_' + Math.random().toString(36).substr(2, 9),
         isAnonymous: true,
+        displayName: name,
         email: null,
       } as any;
       
       setCurrentUser(guestUser);
-      triggerToast("Guest Mode Enabled (Firebase Auth Skipped)");
+      triggerToast(`Guest Mode: Welcome ${name}`);
       setActiveScreen('home');
     }
   };
@@ -167,14 +176,17 @@ export default function App() {
   const submitReport = async (data: Partial<Issue>) => {
     if (!currentUser) return;
     try {
+      const reporterName = currentUser?.displayName || 'Community Member';
+      const reporterAvatar = reporterName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
       await addDoc(collection(db, 'issues'), {
         ...data,
         votes: 0,
         status: 'pending',
         reporterUid: currentUser.uid,
-        reporterName: 'Meera K.',
+        reporterName: reporterName,
         reporterLevel: 3,
-        reporterAvatar: 'MK',
+        reporterAvatar: reporterAvatar,
         createdAt: serverTimestamp()
       });
       triggerToast('Report submitted successfully!');
@@ -206,7 +218,7 @@ export default function App() {
       case 'detail': return <DetailScreen issue={selectedIssue!} onBack={() => setActiveScreen('home')} onVote={() => castVote(selectedIssue!.id)} />;
       case 'ngo': return <NGODashboard issues={issues} onDigitize={() => setActiveScreen('digitize')} />;
       case 'digitize': return <DigitizeScreen currentUser={currentUser} onBack={() => setActiveScreen('ngo')} onComplete={() => { triggerToast('Surveys synchronized with database.'); setActiveScreen('ngo'); }} triggerToast={triggerToast} />;
-      case 'profile': return <ProfileScreen onLogout={() => { auth.signOut(); setActiveScreen('auth'); }} />;
+      case 'profile': return <ProfileScreen currentUser={currentUser} onLogout={() => { auth.signOut(); setActiveScreen('auth'); }} />;
       default: return <HomeScreen issues={issues} onSelectIssue={() => {}} />;
     }
   };
@@ -287,7 +299,9 @@ function NavButton({ active, onClick, icon, label }: { active: boolean; onClick:
   );
 }
 
-function AuthScreen({ onLogin }: { onLogin: () => void }) {
+function AuthScreen({ onLogin }: { onLogin: (name: string) => void }) {
+  const [name, setName] = useState('');
+
   return (
     <div className="h-full flex flex-col px-12 py-16 justify-center bg-white">
       <div className="mb-12">
@@ -302,10 +316,22 @@ function AuthScreen({ onLogin }: { onLogin: () => void }) {
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
+        <div>
+          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4 block">Identify Yourself</label>
+          <input 
+            type="text" 
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your Name (e.g. Robin Hood)"
+            className="w-full text-xl font-medium tracking-tight border-b border-slate-100 pb-4 focus:border-slate-900 outline-none transition-colors placeholder:text-slate-200"
+          />
+        </div>
+
         <button 
-          onClick={onLogin}
-          className="w-full py-5 bg-slate-900 text-white rounded-3xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-3 shadow-xl"
+          onClick={() => onLogin(name)}
+          disabled={!name.trim()}
+          className="w-full py-5 bg-slate-900 text-white rounded-3xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-3 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
           Continue to Community
@@ -595,8 +621,7 @@ function NGODashboard({ issues, onDigitize }: { issues: Issue[]; onDigitize: () 
     <div className="px-6 py-10 space-y-10">
       <header>
         <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Impact Overview</div>
-        <h2 className="text-2xl font-semibold tracking-tight leading-none mb-4">NGO Control Center</h2>
-        <p className="text-[10px] font-medium text-slate-400 leading-relaxed max-w-[200px] mb-10">Solving the "Solution Challenge": Turning scattered data into community action.</p>
+        <h2 className="text-2xl font-semibold tracking-tight leading-none mb-10">NGO Control Center</h2>
         
         <div className="grid grid-cols-3 gap-4">
           <div className="p-6 bg-slate-900 rounded-[2.5rem] text-white">
@@ -860,7 +885,10 @@ function ResultCard({ label, value, icon }: { label: string; value: string; icon
   );
 }
 
-function ProfileScreen({ onLogout }: { onLogout: () => void }) {
+function ProfileScreen({ currentUser, onLogout }: { currentUser: FirebaseUser | null; onLogout: () => void }) {
+  const name = currentUser?.displayName || 'Community Member';
+  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
   return (
     <div className="px-6 py-10 space-y-12 pb-32">
       <header className="flex justify-between items-center">
@@ -878,10 +906,10 @@ function ProfileScreen({ onLogout }: { onLogout: () => void }) {
       <div className="flex flex-col items-center text-center">
         <div className="w-32 h-32 rounded-[3.5rem] bg-slate-50 p-2 shadow-xl mb-6 flex items-center justify-center">
            <div className="w-full h-full rounded-[3rem] bg-slate-900 flex items-center justify-center text-white text-5xl font-light tracking-tighter">
-              MK
+              {initials || '??'}
            </div>
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight mb-2">Meera Krishnan</h1>
+        <h1 className="text-3xl font-semibold tracking-tight mb-2">{name}</h1>
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full">
            <Award size={14} className="text-slate-900" />
            <span className="text-[10px] font-bold uppercase tracking-widest">Level 3 Reporter</span>
