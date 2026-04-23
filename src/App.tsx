@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -138,7 +139,10 @@ export default function App() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  const triggerToast = (msg: string) => setShowToast(msg);
+  const triggerToast = (msg: string) => {
+    setShowToast(msg);
+    setTimeout(() => setShowToast(null), 3000);
+  };
 
   const handleLogin = async () => {
     try {
@@ -201,7 +205,7 @@ export default function App() {
       case 'post': return <PostScreen onBack={() => setActiveScreen('home')} onSubmit={submitReport} />;
       case 'detail': return <DetailScreen issue={selectedIssue!} onBack={() => setActiveScreen('home')} onVote={() => castVote(selectedIssue!.id)} />;
       case 'ngo': return <NGODashboard issues={issues} onDigitize={() => setActiveScreen('digitize')} />;
-      case 'digitize': return <DigitizeScreen currentUser={currentUser} onBack={() => setActiveScreen('ngo')} onComplete={() => { triggerToast('Surveys synchronized with database.'); setActiveScreen('ngo'); }} />;
+      case 'digitize': return <DigitizeScreen currentUser={currentUser} onBack={() => setActiveScreen('ngo')} onComplete={() => { triggerToast('Surveys synchronized with database.'); setActiveScreen('ngo'); }} triggerToast={triggerToast} />;
       case 'profile': return <ProfileScreen onLogout={() => { auth.signOut(); setActiveScreen('auth'); }} />;
       default: return <HomeScreen issues={issues} onSelectIssue={() => {}} />;
     }
@@ -674,7 +678,7 @@ function NGODashboard({ issues, onDigitize }: { issues: Issue[]; onDigitize: () 
   );
 }
 
-function DigitizeScreen({ currentUser, onBack, onComplete }: { currentUser: FirebaseUser | null; onBack: () => void; onComplete: () => void }) {
+function DigitizeScreen({ currentUser, onBack, onComplete, triggerToast }: { currentUser: FirebaseUser | null; onBack: () => void; onComplete: () => void; triggerToast: (msg: string) => void }) {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -696,25 +700,42 @@ function DigitizeScreen({ currentUser, onBack, onComplete }: { currentUser: Fire
     setIsAnalyzing(true);
     try {
       const base64Data = image.split(',')[1];
-      const response = await fetch("/api/digitize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64Data })
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            parts: [
+              { text: "This is a photo of a community survey or field report. Extract the key data into a structured JSON format. Identify the 'Primary Need', 'Location', 'Severity (1-5)', and 'Citizen Comment'. Be precise." },
+              { inlineData: { data: base64Data, mimeType: 'image/jpeg' } }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              need: { type: Type.STRING },
+              location: { type: Type.STRING },
+              severity: { type: Type.NUMBER },
+              comment: { type: Type.STRING }
+            },
+            required: ['need', 'location', 'severity']
+          }
+        }
       });
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Server error");
-      }
-
-      const result = await response.json();
-      // Clean the string if it contains markdown code blocks
-      const cleanedText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const data = JSON.parse(cleanedText || '{}');
+      // Handle potential markdown formatting from the AI
+      const rawText = response.text || '{}';
+      const jsonMatch = rawText.match(/```json\n?([\s\S]*?)\n?```/) || 
+                       rawText.match(/```\n?([\s\S]*?)\n?```/);
+      const cleanedText = jsonMatch ? jsonMatch[1] : rawText;
+      
+      const data = JSON.parse(cleanedText.trim());
       setResults(data);
     } catch (error) {
       console.error("Digitization failed:", error);
-      triggerToast("Digitization failed. Check server logs.");
+      triggerToast("Digitization failed.");
     } finally {
       setIsAnalyzing(false);
     }
