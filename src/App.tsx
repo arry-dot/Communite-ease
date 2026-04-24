@@ -477,7 +477,7 @@ function PostScreen({ onBack, onSubmit }: { onBack: () => void; onSubmit: (data:
   const [cat, setCat] = useState('Water');
 
   return (
-    <div className="px-6 py-10 min-h-full bg-white">
+    <div className="px-6 py-10 min-h-full bg-white pb-32">
       <nav className="flex justify-between items-center mb-12">
         <button onClick={onBack} className="w-10 h-10 rounded-2xl border border-slate-100 flex items-center justify-center text-slate-900">
           <ArrowLeft size={18} />
@@ -781,7 +781,7 @@ function DigitizeScreen({ currentUser, onBack, onComplete, triggerToast }: { cur
   };
 
   return (
-    <div className="px-6 py-10 min-h-full bg-white">
+    <div className="px-6 py-10 min-h-full bg-white pb-32">
       <nav className="flex justify-between items-center mb-12">
         <button onClick={onBack} className="w-10 h-10 rounded-2xl border border-slate-100 flex items-center justify-center">
           <ArrowLeft size={18} />
